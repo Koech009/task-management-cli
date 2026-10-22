@@ -4,9 +4,12 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { RefreshSessionEntity } from './refresh-session.entity.js';
 
 @Entity('users')
 export class User {
@@ -44,6 +47,12 @@ export class User {
     default: false,
   })
   isEmailVerified: boolean;
+
+  @OneToMany(
+    () => RefreshSessionEntity,
+    (refreshSession) => refreshSession.user,
+  )
+  refreshSessions: Relation<RefreshSessionEntity[]>;
 
   @CreateDateColumn()
   createdAt: Date;
