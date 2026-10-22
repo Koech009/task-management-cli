@@ -20,10 +20,10 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-   "migration:generate": "tsx ./node_modules/typeorm/cli.js migration:generate src/database/migrations/UserMigration -d src/database/typeorm.config.ts",
-"migration:create": "tsx ./node_modules/typeorm/cli.js migration:create src/database/migrations/NewMigration",
-"migration:run": "tsx ./node_modules/typeorm/cli.js migration:run -d src/database/typeorm.config.ts",
-"migration:revert": "tsx ./node_modules/typeorm/cli.js migration:revert -d src/database/typeorm.config.ts"
+    "migration:generate": "tsx ./node_modules/typeorm/cli.js migration:generate src/database/migrations/UserMigration -d src/database/typeorm.config.ts",
+    "migration:create": "tsx ./node_modules/typeorm/cli.js migration:create src/database/migrations/NewMigration",
+    "migration:run": "tsx ./node_modules/typeorm/cli.js migration:run -d src/database/typeorm.config.ts",
+    "migration:revert": "tsx ./node_modules/typeorm/cli.js migration:revert -d src/database/typeorm.config.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -38,6 +38,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "mysql2": "^3.24.6",
+    "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -52,6 +53,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
+    "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.2",
     "oxlint": "^1.58.0",
