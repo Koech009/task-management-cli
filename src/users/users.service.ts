@@ -1,4 +1,3 @@
-
 import {
   BadRequestException,
   ConflictException,
@@ -35,10 +34,7 @@ export class UsersService {
     }
 
     // Hash the plain-text password before storing it.
-    const passwordHash = await bcrypt.hash(
-      createUserDto.password,
-      12,
-    );
+    const passwordHash = await bcrypt.hash(createUserDto.password, 12);
 
     // Create the entity without accepting an ID from the client.
     const user = this.usersRepository.create({
@@ -78,17 +74,14 @@ export class UsersService {
       !Number.isSafeInteger(requestedLimit) ||
       requestedLimit < 1
     ) {
-      throw new BadRequestException(
-        'Page and limit must be positive integers',
-      );
+      throw new BadRequestException('Page and limit must be positive integers');
     }
 
     // Prevent excessively large database queries.
     const limitNumber = Math.min(requestedLimit, 100);
 
     // Start building the database query.
-    const queryBuilder =
-      this.usersRepository.createQueryBuilder('user');
+    const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
     // Search for partial matches in the name or email.
     if (search) {
@@ -131,8 +124,7 @@ export class UsersService {
     queryBuilder.skip(skip).take(limitNumber);
 
     // Retrieve this page and the total matching count.
-    const [users, total] =
-      await queryBuilder.getManyAndCount();
+    const [users, total] = await queryBuilder.getManyAndCount();
 
     return {
       data: users,
@@ -152,9 +144,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(
-        `User with ID ${id} not found`,
-      );
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
 
     return user;
@@ -168,10 +158,7 @@ export class UsersService {
     const user = await this.findOne(id);
 
     // Prevent changing an email to one already in use.
-    if (
-      updateUserDto.email &&
-      updateUserDto.email !== user.email
-    ) {
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
       const existingUser = await this.usersRepository.findOne({
         where: { email: updateUserDto.email },
       });
@@ -192,10 +179,7 @@ export class UsersService {
 
     // Hash a new password rather than storing plain text.
     if (updateUserDto.password) {
-      user.passwordHash = await bcrypt.hash(
-        updateUserDto.password,
-        12,
-      );
+      user.passwordHash = await bcrypt.hash(updateUserDto.password, 12);
     }
 
     const savedUser = await this.usersRepository.save(user);
@@ -215,5 +199,14 @@ export class UsersService {
     return {
       message: 'User deleted successfully',
     };
+  }
+
+  // Used during login: explicitly retrieves passwordHash
+  async findByEmailForAuth(email: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', { email })
+      .getOne();
   }
 }
