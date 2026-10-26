@@ -16,6 +16,7 @@ import type { AuthenticatedUser } from './decorators/current-user.decorator.js';
 import { RolesGuard } from './guards/roles.guard.js';
 import { UserRole } from '../common/enums/user-role.enum.js';
 import { Roles } from './decorators/roles.decorator.js';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -27,6 +28,9 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({
+    default: { limit: 5, ttl: 60_000 },
+  })
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);

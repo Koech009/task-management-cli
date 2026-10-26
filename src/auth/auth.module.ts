@@ -55,7 +55,8 @@ import { RolesGuard } from './guards/roles.guard.js';
   // Registers the classes NestJS must instantiate and inject.
   providers: [AuthService, JwtStrategy],
 
-  // Allows other modules to inject AuthService if needed.
-  exports: [AuthService],
+  // Lets other modules inject AuthService, and use JwtAuthGuard
+  // (needs PassportModule) or JwtService (needs JwtModule).
+  exports: [AuthService, PassportModule, JwtModule],
 })
 export class AuthModule {}
