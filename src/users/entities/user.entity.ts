@@ -10,6 +10,7 @@ import type { Relation } from 'typeorm';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { RefreshSessionEntity } from './refresh-session.entity.js';
+import { Project } from '../../projects/entities/project.entity.js';
 
 @Entity('users')
 export class User {
@@ -53,6 +54,9 @@ export class User {
     (refreshSession) => refreshSession.user,
   )
   refreshSessions: Relation<RefreshSessionEntity[]>;
+
+  @OneToMany(() => Project, (project) => project.createdBy)
+  createdProjects: Relation<Project[]>;
 
   @CreateDateColumn()
   createdAt: Date;
