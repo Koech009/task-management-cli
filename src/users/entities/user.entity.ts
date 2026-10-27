@@ -11,6 +11,7 @@ import type { Relation } from 'typeorm';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { RefreshSessionEntity } from './refresh-session.entity.js';
 import { Project } from '../../projects/entities/project.entity.js';
+import { ProjectMember } from '../../projects/entities/project-member.entity.js';
 
 @Entity('users')
 export class User {
@@ -57,6 +58,9 @@ export class User {
 
   @OneToMany(() => Project, (project) => project.createdBy)
   createdProjects: Relation<Project[]>;
+
+  @OneToMany(() => ProjectMember, (projectMember) => projectMember.user)
+  projectMemberships: Relation<ProjectMember[]>;
 
   @CreateDateColumn()
   createdAt: Date;
