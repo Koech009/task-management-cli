@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { LoggerMiddlware } from './common/middleware/logger.middleware.js';
+// import { EmailModule } from './common/email/email.module.js';
 import Joi from 'joi';
 
 @Module({
