@@ -9,6 +9,7 @@ import { ProjectMember } from './entities/project-member.entity.js';
 import { ProjectMembersService } from './project-members/project-members.service.js';
 import { User } from '../users/entities/user.entity.js';
 import { ProjectMembersController } from './project-members/project-members.controller.js';
+import { Task } from '../tasks/entities/task.entity.js';
 
 @Module({
   imports: [
