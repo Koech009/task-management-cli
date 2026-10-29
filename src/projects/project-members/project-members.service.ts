@@ -29,6 +29,56 @@ export class ProjectMembersService {
     private readonly userRepository: Repository<User>,
   ) {}
 
+  /**
+   * GET PROJECT MEMBERS
+   *
+   * Returns all members of a project.
+   * Only project members can view the member list.
+   */
+  async findAll(projectId: string, requesterId: string) {
+    // Confirm the project exists.
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found.');
+    }
+
+    // Confirm the requester belongs to the project.
+    const requesterMembership = await this.projectMemberRepository.findOne({
+      where: {
+        projectId,
+        userId: requesterId,
+      },
+    });
+
+    // Allow the creator even if their OWNER membership row is missing.
+    const isCreator = project.createdById === requesterId;
+
+    if (!requesterMembership && !isCreator) {
+      throw new ForbiddenException(
+        'You do not have permission to view this project’s members.',
+      );
+    }
+
+    // Load all memberships and their associated users.
+    const memberships = await this.projectMemberRepository.find({
+      where: { projectId },
+      relations: { user: true },
+      order: { joinedAt: 'ASC' },
+    });
+
+    // Return only safe user information.
+    return memberships.map((membership) => ({
+      userId: membership.userId,
+      name: membership.user.name,
+      email: membership.user.email,
+      role: membership.role,
+      joinedAt: membership.joinedAt,
+    }));
+  }
+
   // Add an existing user to a project.
   //
   // projectId: the project receiving the new member.

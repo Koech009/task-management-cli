@@ -7,6 +7,8 @@ import {
   Patch,
   Req,
   UseGuards,
+  BadRequestException,
+  Get,
 } from '@nestjs/common';
 
 import type { Request } from 'express';
@@ -34,6 +36,15 @@ export class ProjectMembersController {
     // Inject the service containing the membership business logic.
     private readonly projectMembersService: ProjectMembersService,
   ) {}
+  // GET /projects/:projectId/members
+  // Lists the members of a project.
+  @Get()
+  findAll(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.projectMembersService.findAll(projectId, req.user.id);
+  }
 
   // POST /projects/:projectId/members
   // Adds an existing user to a project as a MEMBER or VIEWER.
@@ -58,8 +69,7 @@ export class ProjectMembersController {
   }
 
   // PATCH /projects/:projectId/members/:userId/role
-  // Promotes an existing project member to ADMIN.
-  // Only the project owner can perform this operation.
+  // Promotes an existing project member to ADMIN- done by only project owner
   @Patch(':userId/role')
   assignAdmin(
     // Identify the project whose membership is being changed.
@@ -76,8 +86,11 @@ export class ProjectMembersController {
   ) {
     // Use the validated role explicitly so that this endpoint
     // cannot accidentally assign a different role.
+
     if (dto.role !== ProjectRole.ADMIN) {
-      throw new Error('This endpoint only supports assigning the ADMIN role.');
+      throw new BadRequestException(
+        'This endpoint only supports assigning the ADMIN role.',
+      );
     }
 
     return this.projectMembersService.assignAdmin(
