@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  OneToMany,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -10,6 +11,7 @@ import {
 import type { Relation } from 'typeorm';
 
 import { User } from '../../users/entities/user.entity.js';
+import { Task } from '../../tasks/entities/task.entity.js';
 
 @Entity('projects')
 export class Project {
@@ -31,6 +33,10 @@ export class Project {
   @ManyToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'createdById' })
   createdBy: Relation<User>;
+
+  // One project can contain many tasks.
+  @OneToMany(() => Task, (task) => task.project)
+  tasks: Relation<Task[]>;
 
   @Column({
     type: 'varchar',
