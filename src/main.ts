@@ -2,9 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+// import { ClassSerializationInterceptor } from './common/interceptors/class-serialization/class-serialization.interceptor.js';
+// import { LoggingInterceptor } from './common/interceptors/logging/logging.interceptor.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // app.useGlobalInterceptors(new ClassSerializationInterceptor());
 
   app.use(helmet());
 
