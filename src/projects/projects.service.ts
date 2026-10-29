@@ -4,12 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { Project } from './entities/project.entity.js';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-projects.dto.js';
 import { QueryProjectsDto } from './dto/query-projects.dto.js';
+import { ProjectResponseDto } from './dto/project-response.dto.js';
+import { ProjectMember } from './entities/project-member.entity.js';
+import { ProjectRole } from '../common/enums/project-role.enum.js';
 
 @Injectable()
 export class ProjectsService {
@@ -17,7 +20,36 @@ export class ProjectsService {
     // Inject the TypeORM repository used to access the projects table.
     @InjectRepository(Project)
     private readonly projectsRepository: Repository<Project>,
+
+    private readonly dataSource: DataSource,
   ) {}
+
+  // Relations needed to build a ProjectResponseDto.
+  private readonly projectRelations = { createdBy: true };
+
+  /**
+   * Finds a project owned by the user, with the creator loaded.
+   * Returns 404 if the project does not exist or belongs to someone else.
+   * Used internally so update/remove can work with the entity.
+   */
+  private async findOwnedProject(
+    projectId: string,
+    userId: string,
+  ): Promise<Project> {
+    const project = await this.projectsRepository.findOne({
+      where: {
+        id: projectId,
+        createdById: userId,
+      },
+      relations: this.projectRelations,
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found.');
+    }
+
+    return project;
+  }
 
   /**
    * CREATE PROJECT
@@ -30,36 +62,49 @@ export class ProjectsService {
   async create(
     createProjectDto: CreateProjectDto,
     userId: string,
-  ): Promise<Project> {
-    // Build a Project entity from the validated request data.
-    const project = this.projectsRepository.create({
-      name: createProjectDto.name,
-      description: createProjectDto.description ?? null,
+  ): Promise<ProjectResponseDto> {
+    // Start a database transaction.
+    return this.dataSource.transaction(async (manager) => {
+      // Create the project using the transaction's repository.
+      const projectRepository = manager.getRepository(Project);
 
-      // Associate the project with its creator.
-      createdById: userId,
+      const project = projectRepository.create({
+        name: createProjectDto.name,
+        description: createProjectDto.description ?? null,
+        createdById: userId,
+      });
+
+      // Save the project.
+      const savedProject = await projectRepository.save(project);
+
+      // Create a membership record for the project creator.
+      const projectMemberRepository = manager.getRepository(ProjectMember);
+
+      const ownerMembership = projectMemberRepository.create({
+        projectId: savedProject.id,
+        userId,
+        role: ProjectRole.OWNER,
+      });
+
+      // Save the owner membership in the same transaction.
+      await projectMemberRepository.save(ownerMembership);
+
+      // Reload the project with its creator relation.
+      const createdProject = await projectRepository.findOneOrFail({
+        where: { id: savedProject.id },
+        relations: this.projectRelations,
+      });
+
+      return ProjectResponseDto.fromEntity(createdProject);
     });
-
-    // Save the new project to MySQL and return the saved record.
-    return this.projectsRepository.save(project);
   }
-
   /**
    * GET ALL PROJECTS
    *
    * Returns only the projects created by the authenticated user.
    * Pagination prevents the API from returning every record at once.
    */
-  async findAll(
-    userId: string,
-    query: QueryProjectsDto,
-  ): Promise<{
-    data: Project[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }> {
+  async findAll(userId: string, query: QueryProjectsDto) {
     // Use default values when the client omits pagination parameters.
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
@@ -86,6 +131,7 @@ export class ProjectsService {
       where: {
         createdById: userId,
       },
+      relations: this.projectRelations,
       order: {
         createdAt: 'DESC',
         id: 'ASC',
@@ -94,13 +140,17 @@ export class ProjectsService {
       take: limit,
     });
 
-    // Return the results along with pagination metadata.
+    // Return the mapped results along with pagination metadata.
     return {
-      data: projects,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      data: projects.map((project) => ProjectResponseDto.fromEntity(project)),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPreviousPage: page > 1,
+      },
     };
   }
 
@@ -110,21 +160,13 @@ export class ProjectsService {
    * Finds a project by its ID while checking ownership.
    * A project belonging to another user will not be returned.
    */
-  async findOne(projectId: string, userId: string): Promise<Project> {
-    // Match both the requested project ID and its creator's ID.
-    const project = await this.projectsRepository.findOne({
-      where: {
-        id: projectId,
-        createdById: userId,
-      },
-    });
+  async findOne(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectResponseDto> {
+    const project = await this.findOwnedProject(projectId, userId);
 
-    // Return 404 if the project does not exist or belongs to someone else.
-    if (!project) {
-      throw new NotFoundException('Project not found.');
-    }
-
-    return project;
+    return ProjectResponseDto.fromEntity(project);
   }
 
   /**
@@ -136,14 +178,14 @@ export class ProjectsService {
     projectId: string,
     updateProjectDto: UpdateProjectDto,
     userId: string,
-  ): Promise<Project> {
+  ): Promise<ProjectResponseDto> {
     // Reject an empty update request.
     if (Object.keys(updateProjectDto).length === 0) {
       throw new BadRequestException('Provide at least one field to update.');
     }
 
     // Check existence and ownership before making changes.
-    const project = await this.findOne(projectId, userId);
+    const project = await this.findOwnedProject(projectId, userId);
 
     // Apply only the fields supplied by the client.
     // Never update createdById using request-body data.
@@ -155,8 +197,10 @@ export class ProjectsService {
       project.description = updateProjectDto.description;
     }
 
-    // Persist the updated project.
-    return this.projectsRepository.save(project);
+    // Persist the updated project. createdBy is already loaded.
+    const saved = await this.projectsRepository.save(project);
+
+    return ProjectResponseDto.fromEntity(saved);
   }
 
   /**
@@ -169,7 +213,7 @@ export class ProjectsService {
     userId: string,
   ): Promise<{ message: string }> {
     // Verify ownership before deleting anything.
-    const project = await this.findOne(projectId, userId);
+    const project = await this.findOwnedProject(projectId, userId);
 
     // Remove the verified project from the database.
     await this.projectsRepository.remove(project);
