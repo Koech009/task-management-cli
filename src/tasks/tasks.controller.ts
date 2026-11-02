@@ -19,16 +19,19 @@ import { TasksService } from './tasks.service.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { UpdateTaskDto } from './dto/update-task.dto.js';
 import { AssignTaskDto } from './dto/assign-task.dto.js';
-// import { UpdateTaskStatusDto } from './dto/update-task-status.dto.js';
 import { TaskQueryDto } from './dto/task-query.dto.js';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator.js';
+
 import { LoggingInterceptor } from '../common/interceptors/logging/logging.interceptor.js';
 import { TransformInterceptor } from '../common/interceptors/transform/transform.interceptor.js';
 import { ErrorsInterceptor } from '../common/interceptors/errors/errors.interceptor.js';
-// import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
+
+import { TaskRoles } from './decorators/task-roles.decorator.js';
+import { TaskRolesGuard } from './guards/task-roles.guard.js';
+import { ProjectRole } from '../common/enums/project-role.enum.js';
 
 @Controller('tasks')
 @UseInterceptors(LoggingInterceptor)
@@ -36,29 +39,18 @@ import { ErrorsInterceptor } from '../common/interceptors/errors/errors.intercep
 @UseInterceptors(ErrorsInterceptor)
 @UseGuards(JwtAuthGuard)
 export class TasksController {
-  constructor(
-    // Inject the service containing task business logic.
-    private readonly tasksService: TasksService,
-  ) {}
+  constructor(private readonly tasksService: TasksService) {}
 
-  /**
-   * POST /tasks
-   * Creates a task in a project.
-   */
+  // Create a task
   @Post()
   create(
     @Body() createTaskDto: CreateTaskDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    // The authenticated user's ID becomes the task creator.
     return this.tasksService.create(createTaskDto, user.id);
   }
 
-  /**
-   * GET /tasks
-   * Lists accessible tasks with search, filters, sorting and pagination.
-   
-   */
+  // View tasks accessible to the current user
   @Get()
   findAll(
     @Query() query: TaskQueryDto,
@@ -67,11 +59,15 @@ export class TasksController {
     return this.tasksService.findAll(user.id, query);
   }
 
-  /**
-   * GET /tasks/:taskId
-   * Retrieves one task if the user can access its project.
-   */
+  // View a specific task
   @Get(':taskId')
+  @UseGuards(TaskRolesGuard)
+  @TaskRoles(
+    ProjectRole.OWNER,
+    ProjectRole.ADMIN,
+    ProjectRole.MEMBER,
+    ProjectRole.VIEWER,
+  )
   findOne(
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -79,11 +75,10 @@ export class TasksController {
     return this.tasksService.findOne(taskId, user.id);
   }
 
-  /**
-   * PATCH /tasks/:taskId
-   * Updates editable task details.
-   */
+  // Update task details
   @Patch(':taskId')
+  @UseGuards(TaskRolesGuard)
+  @TaskRoles(ProjectRole.OWNER, ProjectRole.ADMIN)
   update(
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Body() updateTaskDto: UpdateTaskDto,
@@ -92,11 +87,10 @@ export class TasksController {
     return this.tasksService.update(taskId, updateTaskDto, user.id);
   }
 
-  /**
-   * PATCH /tasks/:taskId/assignee
-   * Assigns a user or removes the current assignment.
-   */
+  // Assign a task
   @Patch(':taskId/assignee')
+  @UseGuards(TaskRolesGuard)
+  @TaskRoles(ProjectRole.OWNER, ProjectRole.ADMIN)
   assign(
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Body() assignTaskDto: AssignTaskDto,
@@ -105,24 +99,22 @@ export class TasksController {
     return this.tasksService.assign(taskId, assignTaskDto, user.id);
   }
 
-  /**
-   * PATCH /tasks/:taskId/status
-   * Changes the task's status.
-   */
+  // Update task progress
   @Patch(':taskId/status')
+  @UseGuards(TaskRolesGuard)
+  @TaskRoles(ProjectRole.OWNER, ProjectRole.ADMIN, ProjectRole.MEMBER)
   updateStatus(
     @Param('taskId', ParseUUIDPipe) taskId: string,
-    @Body() updateTaskStatusDto: UpdateTaskDto,
+    @Body() updateTaskDto: UpdateTaskDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.tasksService.updateStatus(taskId, updateTaskStatusDto, user.id);
+    return this.tasksService.updateStatus(taskId, updateTaskDto, user.id);
   }
 
-  /**
-   * DELETE /tasks/:taskId
-   * Deletes a task.
-   */
+  // Delete a task
   @Delete(':taskId')
+  @UseGuards(TaskRolesGuard)
+  @TaskRoles(ProjectRole.OWNER, ProjectRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @Param('taskId', ParseUUIDPipe) taskId: string,
