@@ -17,16 +17,17 @@ import { RolesGuard } from './guards/roles.guard.js';
 import { UserRole } from '../common/enums/user-role.enum.js';
 import { Roles } from './decorators/roles.decorator.js';
 import { Throttle } from '@nestjs/throttler';
+import { Public } from './decorators/public.decorator.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
+  @Public()
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
-
+  @Public()
   @Post('login')
   @Throttle({
     default: { limit: 5, ttl: 60_000 },
