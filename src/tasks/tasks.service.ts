@@ -408,4 +408,19 @@ export class TasksService {
 
     await this.tasksRepository.remove(task);
   }
+
+  async count(): Promise<number> {
+    return this.tasksRepository.count();
+  }
+
+  async findTaskForAuthorization(taskId: string) {
+    return this.tasksRepository.findOne({
+      where: {
+        id: taskId,
+      },
+      relations: {
+        project: true,
+      },
+    });
+  }
 }
