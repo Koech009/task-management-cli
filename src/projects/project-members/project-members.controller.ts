@@ -18,6 +18,8 @@ import { ProjectMembersService } from './project-members.service.js';
 import { AddProjectMemberDto } from '../dto/add-project-member.dto.js';
 import { AssignProjectAdminDto } from '../dto/assign-project-admin.dto.js';
 import { ProjectRole } from '../../common/enums/project-role.enum.js';
+import { ProjectRoles } from '../decorators/project-roles.decorator.js';
+import { ALL_PROJECT_ROLES } from '../constants/project-permissions.constant.js';
 
 // Extend Express's Request type to describe the authenticated user.
 // JwtStrategy should attach the user's information to req.user.
@@ -39,6 +41,7 @@ export class ProjectMembersController {
   // GET /projects/:projectId/members
   // Lists the members of a project.
   @Get()
+  @ProjectRoles(...ALL_PROJECT_ROLES)
   findAll(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Req() req: AuthenticatedRequest,
@@ -50,6 +53,7 @@ export class ProjectMembersController {
   // Adds an existing user to a project as a MEMBER or VIEWER.
   // The service checks whether the requester has permission.
   @Post()
+  @ProjectRoles(ProjectRole.OWNER, ProjectRole.ADMIN)
   addMember(
     // Read the project ID from the URL and validate that it is a UUID.
     @Param('projectId', ParseUUIDPipe) projectId: string,

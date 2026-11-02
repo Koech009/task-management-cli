@@ -228,4 +228,31 @@ export class ProjectMembersService {
     // 7. Persist the updated role in the database.
     return this.projectMemberRepository.save(membership);
   }
+
+  async getUserProjectRole(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectRole | null> {
+    // Check whether the user owns the project.
+    const project = await this.projectRepository.findOne({
+      where: {
+        id: projectId,
+        createdBy: { id: userId },
+      },
+    });
+
+    if (project) {
+      return ProjectRole.OWNER;
+    }
+
+    // Check whether the user is a project member.
+    const membership = await this.projectMemberRepository.findOne({
+      where: {
+        projectId,
+        userId,
+      },
+    });
+
+    return membership?.role ?? null;
+  }
 }
