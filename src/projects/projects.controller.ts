@@ -18,6 +18,13 @@ import { QueryProjectsDto } from './dto/query-projects.dto.js';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { RolesGuard } from '../auth/guards/roles.guard.js';
+import { UserRole } from '../common/enums/user-role.enum.js';
+import { Roles } from '../auth/decorators/roles.decorator.js';
+import { ALL_PROJECT_ROLES } from './constants/project-permissions.constant.js';
+import { ProjectRoles } from './decorators/project-roles.decorator.js';
+import { ProjectRole } from '../common/enums/project-role.enum.js';
+import { ProjectRolesGuard } from './guards/project-roles.guard.js';
 
 // Describes the authenticated user object provided by your JWT strategy.
 // Adjust this interface if your existing strategy uses a different shape.
@@ -29,7 +36,7 @@ interface AuthenticatedUser {
 
 // Every endpoint requires a valid access token.
 @Controller('projects')
-@UseGuards(JwtAuthGuard) //protect every route
+@UseGuards(JwtAuthGuard, RolesGuard, ProjectRolesGuard) //protect every route
 export class ProjectsController {
   constructor(
     // Inject the service containing our project business logic.
@@ -58,6 +65,7 @@ export class ProjectsController {
    * Returns only projects belonging to the current user.
    */
   @Get()
+  @ProjectRoles(...ALL_PROJECT_ROLES)
   findAll(
     @Query() query: QueryProjectsDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -71,7 +79,9 @@ export class ProjectsController {
    *
    * ParseUUIDPipe rejects malformed project IDs.
    */
+
   @Get(':projectId')
+  @ProjectRoles(...ALL_PROJECT_ROLES)
   findOne(
     @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -85,7 +95,9 @@ export class ProjectsController {
    *
    * Only the project's creator can update it.
    */
+
   @Patch(':projectId')
+  @ProjectRoles(ProjectRole.OWNER)
   update(
     @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @Body() updateProjectDto: UpdateProjectDto,
@@ -101,6 +113,8 @@ export class ProjectsController {
    * Only the project's creator can delete it.
    */
   @Delete(':projectId')
+  @ProjectRoles(ProjectRole.OWNER)
+  @Roles(UserRole.ADMIN)
   remove(
     @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @CurrentUser() user: AuthenticatedUser,
