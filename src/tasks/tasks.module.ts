@@ -7,14 +7,17 @@ import { Project } from '../projects/entities/project.entity.js';
 import { ProjectMember } from '../projects/entities/project-member.entity.js';
 import { User } from '../users/entities/user.entity.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { TaskRolesGuard } from './guards/task-roles.guard.js';
+import { ProjectsModule } from '../projects/projects.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Task, Project, ProjectMember, User]),
     AuthModule,
+    ProjectsModule,
   ],
   controllers: [TasksController],
-  providers: [TasksService],
+  providers: [TasksService, TaskRolesGuard],
   exports: [TasksService],
 })
 export class TasksModule {}
