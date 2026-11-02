@@ -9,15 +9,27 @@ import { AuthModule } from './auth/auth.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { LoggerMiddlware } from './common/middleware/logger.middleware.js';
-// import { EmailModule } from './common/email/email.module.js';
 import { TasksModule } from './tasks/tasks.module.js';
 import Joi from 'joi';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ClassSerializerInterceptor } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
-
+import { NotificationsModule } from './common/notification/notification.module.js';
+import { AppInfoService } from './config/app-info.service.js';
+import { AppService } from './app.service.js';
+import { AppController } from './app.controller.js';
+import { ReportsModule } from './reports/reports.module.js';
 @Module({
   imports: [
+    NotificationsModule.forRoot({
+      applicationName: 'TaskFlow',
+      defaultSender: 'no-reply@example.com',
+      email: {
+        senderName: 'My NestJS Application',
+        senderEmail: 'noreply@example.com',
+      },
+    }),
+
     ConfigModule.forRoot({
       isGlobal: true,
 
@@ -49,12 +61,8 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
       ],
     }),
 
-    // Load environment variables from .env.
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-
     // Configure the MySQL database.
+
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST,
@@ -72,6 +80,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
     ProjectsModule,
     ApiKeysModule,
     TasksModule,
+    ReportsModule,
+    // EmailModule,
+    // NotificationsModule,
   ],
 
   // Register the rate limiter as a global guard.
@@ -88,7 +99,10 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
     },
+    AppInfoService,
+    AppService,
   ],
+  controllers: [AppController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
