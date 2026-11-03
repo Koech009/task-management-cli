@@ -1,35 +1,24 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  DataSource,//lets you run several dab changes in one transaction
-  IsNull,//finds sessions whose revokedAt value is NULL
-  Repository,//responsible for db operations
+  DataSource, //lets you run several dab changes in one transaction
+  IsNull, //finds sessions whose revokedAt value is NULL
+  Repository, //responsible for db operations
 } from 'typeorm';
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-} from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import * as bcrypt from 'bcrypt';
-
-// User entity: represents a user stored in the users table.
 import { User } from '../users/entities/user.entity.js';
-
-// UsersService handles user-related operations such as registration and finding a user by email.
 import { UsersService } from '../users/users.service.js';
-// RefreshSessionEntity represents a refresh-token sessios stored in the refresh_sessions table.
 import { RefreshSessionEntity } from '../users/entities/refresh-session.entity.js';
-// DTOs define and validate the data accepted by our endpoints.
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { MailService } from '../mail/mail.service.js';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     // Allows AuthService to create users and retrieve user records.
     private readonly usersService: UsersService,
@@ -37,15 +26,14 @@ export class AuthService {
     // Signs JWT access tokens and verifies JWTs when needed.
     private readonly jwtService: JwtService,
     //allow multiple db operations to succedd or fail together
-    private readonly dataSource : DataSource,
-    
+    private readonly dataSource: DataSource,
+    private readonly mailService: MailService,
+
     // Injects the repository used to read and write refresh sessions.-provies db acess to refresh sessions
     // The entity must also be registered in AuthModule using
     // TypeOrmModule.forFeature([RefreshSessionEntity]).
     @InjectRepository(RefreshSessionEntity)
-    private readonly refreshSessionsRepository:
-      Repository<RefreshSessionEntity>,
-    
+    private readonly refreshSessionsRepository: Repository<RefreshSessionEntity>,
   ) {}
 
   /**
@@ -55,8 +43,8 @@ export class AuthService {
    * We normalize the email before passing it to that service.
    */
   async register(dto: RegisterDto) {
-    return this.usersService.create({
-      name: dto.name,
+    const user = await this.usersService.create({
+      name: dto.name.trim(),
 
       // Convert the email to lowercase and remove surrounding spaces.
       email: dto.email.trim().toLowerCase(),
@@ -65,6 +53,20 @@ export class AuthService {
       // UsersService should hash it before storing it in the database.
       password: dto.password,
     });
+
+    // The account exists now, so an email failure must not fail registration.
+    try {
+      await this.mailService.sendWelcomeEmail(user.email, user.name);
+    } catch (error) {
+      this.logger.error(
+        `Welcome email failed for user ${user.id}`,
+        error as Error,
+      );
+    }
+
+    return {
+      message: 'Registration successful',
+    };
   }
 
   // CREATE REFRESH SESSION
@@ -81,7 +83,6 @@ export class AuthService {
   private async createRefreshSession(
     user: User,
     familyId: string = randomUUID(),
-
   ): Promise<string> {
     // 1. Generate a secure, unpredictable refresh token.
     //
@@ -96,17 +97,13 @@ export class AuthService {
     //
     // We store this hash instead of the original secret.
     // SHA-256 produces a 64-character hexadecimal string.
-    const tokenHash = createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
     // 3. Set the refresh session's expiry to seven days from now.
     //
     // Date.now() returns the current time in milliseconds.
     // Seven days = 7 * 24 * 60 * 60 * 1000 milliseconds.
-    const expiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    );
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     // 4. Create a refresh-session entity.
     //
@@ -116,12 +113,12 @@ export class AuthService {
     // The "user" relationship associates this session with the
     // user who successfully logged in.
     const session = this.refreshSessionsRepository.create({
-      user,// manyto one reltation to user
-      userId: user.id,//explicitly sets the foreign key value
-      tokenHash,//stores the hash not the raw token
-      familyId,//group related rotated session
-      expiresAt,//expiration timestap
-      revokedAt: null,//session is initally not revoked
+      user, // manyto one reltation to user
+      userId: user.id, //explicitly sets the foreign key value
+      tokenHash, //stores the hash not the raw token
+      familyId, //group related rotated session
+      expiresAt, //expiration timestap
+      revokedAt: null, //session is initally not revoked
       replacedBySessionId: null,
     });
 
@@ -154,8 +151,7 @@ export class AuthService {
     //
     // This method must explicitly load passwordHash if the User
     // entity defines that column with select: false.
-    const user =
-      await this.usersService.findByEmailForAuth(email);
+    const user = await this.usersService.findByEmailForAuth(email);
 
     // 3. Check that the user exists and the password is correct.
     //
@@ -163,13 +159,8 @@ export class AuthService {
     // the stored hash without needing to decrypt the hash.
     //
     // Use a generic error so we don't reveal whether an email exists.
-    if (
-      !user ||
-      !(await bcrypt.compare(dto.password, user.passwordHash))
-    ) {
-      throw new UnauthorizedException(
-        'Invalid email or password',
-      );
+    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     // 4. Generate the access JWT.
@@ -193,10 +184,7 @@ export class AuthService {
     //
     // This destructuring operation excludes passwordHash from
     // the object we send to the client.
-    const {
-      passwordHash: _passwordHash,
-      ...safeUser
-    } = user;
+    const { passwordHash: _passwordHash, ...safeUser } = user;
 
     // 7. Return the authentication response.
     //
@@ -209,7 +197,6 @@ export class AuthService {
       user: safeUser,
     };
   }
-
 
   /**
    * Logs out the client by revoking its refresh-token session.
@@ -225,9 +212,7 @@ export class AuthService {
 
     // Hash the supplied token using the same algorithm used at login.
     // This lets us find the session without storing the raw token.
-    const tokenHash = createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
     // Find the session that belongs to this refresh token.
     const session = await this.refreshSessionsRepository.findOne({
@@ -255,7 +240,6 @@ export class AuthService {
     };
   }
 
-
   /**
    * Exchanges a valid refresh token for a new pair of tokens.
    *
@@ -271,103 +255,97 @@ export class AuthService {
 
     // Hash the supplied token exactly as we did during login.
     // The raw refresh token is never searched for or stored in MySQL.
-    const tokenHash = createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
+    const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
     // Use a transaction so the old session cannot be revoked
     // without its replacement being saved successfully.
-    const result = await this.dataSource.transaction(
-      async (manager) => {
-        const sessions = manager.getRepository(RefreshSessionEntity);
+    const result = await this.dataSource.transaction(async (manager) => {
+      const sessions = manager.getRepository(RefreshSessionEntity);
 
-        // Lock this session while processing it. This helps prevent
-        // concurrent requests from rotating the same token at once.
-        const session = await sessions.findOne({
-          where: { tokenHash },
-          relations: { user: true },
-          lock: { mode: 'pessimistic_write' },
-        });
+      // Lock this session while processing it. This helps prevent
+      // concurrent requests from rotating the same token at once.
+      const session = await sessions.findOne({
+        where: { tokenHash },
+        relations: { user: true },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-        // A token hash that has no matching database record is invalid.
-        if (!session) {
-          return { status: 'invalid' as const };
+      // A token hash that has no matching database record is invalid.
+      if (!session) {
+        return { status: 'invalid' as const };
+      }
+
+      // If a token was already replaced, its reuse may indicate
+      // that an old token has been used again. Revoke the remaining
+      // active sessions in this token family as a precaution.
+      if (session.revokedAt !== null) {
+        if (session.replacedBySessionId !== null) {
+          await sessions.update(
+            {
+              familyId: session.familyId,
+              revokedAt: IsNull(),
+            },
+            {
+              revokedAt: new Date(),
+            },
+          );
+
+          return { status: 'reuse' as const };
         }
 
-        // If a token was already replaced, its reuse may indicate
-        // that an old token has been used again. Revoke the remaining
-        // active sessions in this token family as a precaution.
-        if (session.revokedAt !== null) {
-          if (session.replacedBySessionId !== null) {
-            await sessions.update(
-              {
-                familyId: session.familyId,
-                revokedAt: IsNull(),
-              },
-              {
-                revokedAt: new Date(),
-              },
-            );
+        return { status: 'invalid' as const };
+      }
 
-            return { status: 'reuse' as const };
-          }
-
-          return { status: 'invalid' as const };
-        }
-
-        // Do not accept a refresh session that has expired.
-        if (session.expiresAt.getTime() <= Date.now()) {
-          session.revokedAt = new Date();
-          await sessions.save(session);
-
-          return { status: 'expired' as const };
-        }
-
-        // Create a fresh, unpredictable refresh token.
-        const newRefreshToken = randomBytes(32).toString('base64url');
-
-        // Save only its SHA-256 hash in the database.
-        const newTokenHash = createHash('sha256')
-          .update(newRefreshToken)
-          .digest('hex');
-
-        // The replacement expires seven days from now.
-        const expiresAt = new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        );
-
-        // Keep the same familyId so this session remains linked
-        // to the original login and its previous rotations.
-        const replacement = sessions.create({
-          user: session.user,
-          userId: session.userId,
-          tokenHash: newTokenHash,
-          familyId: session.familyId,
-          expiresAt,
-          revokedAt: null,
-          replacedBySessionId: null,
-        });
-
-        // Save the replacement first so we know its session ID.
-        const savedReplacement = await sessions.save(replacement);
-
-        // Revoke the old session and record which session replaced it.
+      // Do not accept a refresh session that has expired.
+      if (session.expiresAt.getTime() <= Date.now()) {
         session.revokedAt = new Date();
-        session.replacedBySessionId = savedReplacement.id;
         await sessions.save(session);
 
-        // Issue a new short-lived access JWT for the same user.
-        const accessToken = await this.jwtService.signAsync({
-          sub: session.userId,
-        });
+        return { status: 'expired' as const };
+      }
 
-        return {
-          status: 'success' as const,
-          accessToken,
-          refreshToken: newRefreshToken,
-        };
-      },
-    );
+      // Create a fresh, unpredictable refresh token.
+      const newRefreshToken = randomBytes(32).toString('base64url');
+
+      // Save only its SHA-256 hash in the database.
+      const newTokenHash = createHash('sha256')
+        .update(newRefreshToken)
+        .digest('hex');
+
+      // The replacement expires seven days from now.
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      // Keep the same familyId so this session remains linked
+      // to the original login and its previous rotations.
+      const replacement = sessions.create({
+        user: session.user,
+        userId: session.userId,
+        tokenHash: newTokenHash,
+        familyId: session.familyId,
+        expiresAt,
+        revokedAt: null,
+        replacedBySessionId: null,
+      });
+
+      // Save the replacement first so we know its session ID.
+      const savedReplacement = await sessions.save(replacement);
+
+      // Revoke the old session and record which session replaced it.
+      session.revokedAt = new Date();
+      session.replacedBySessionId = savedReplacement.id;
+      await sessions.save(session);
+
+      // Issue a new short-lived access JWT for the same user.
+      const accessToken = await this.jwtService.signAsync({
+        sub: session.userId,
+      });
+
+      return {
+        status: 'success' as const,
+        accessToken,
+        refreshToken: newRefreshToken,
+      };
+    });
 
     // Throw errors only after the transaction has finished.
     // This is important: family revocations must commit rather
@@ -393,6 +371,4 @@ export class AuthService {
       refreshToken: result.refreshToken,
     };
   }
-
-
 }
