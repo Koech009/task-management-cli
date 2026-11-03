@@ -26,7 +26,8 @@ export class TaskReportService
   private timer?: NodeJS.Timeout;
 
   // How often the report runs (1 minute for testing; use a longer interval later)
-  private readonly intervalMs = 60_000;
+  // private readonly intervalMs = 60_000;
+  private readonly intervalMs = 3_600_000; // 1 hour
 
   // Inject TasksService (exported by TasksModule) instead of a raw repository.
   // The report service no longer needs to know how tasks are stored.
