@@ -19,6 +19,8 @@ import { AppInfoService } from './config/app-info.service.js';
 import { AppService } from './app.service.js';
 import { AppController } from './app.controller.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { FilesModule } from './files/files.module.js';
+import { MailModule } from './mail/mail.module.js';
 @Module({
   imports: [
     NotificationsModule.forRoot({
@@ -81,8 +83,8 @@ import { ReportsModule } from './reports/reports.module.js';
     ApiKeysModule,
     TasksModule,
     ReportsModule,
-    // EmailModule,
-    // NotificationsModule,
+    FilesModule,
+    MailModule,
   ],
 
   // Register the rate limiter as a global guard.
