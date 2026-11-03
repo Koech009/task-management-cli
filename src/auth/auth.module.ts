@@ -11,6 +11,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
 import { RolesGuard } from './guards/roles.guard.js';
+import { MailModule } from '../mail/mail.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RolesGuard } from './guards/roles.guard.js';
 
     // Provides UsersService so AuthService can find and create users.
     UsersModule,
+    MailModule,
 
     // Registers the repository for RefreshSessionEntity.
     // This enables @InjectRepository(RefreshSessionEntity)
